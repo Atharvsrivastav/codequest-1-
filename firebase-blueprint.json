@@ -1,0 +1,51 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "User Profile",
+      "description": "Stores user progress, points, streaks, and badges.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "Firebase Auth UID" },
+        "displayName": { "type": "string" },
+        "email": { "type": "string" },
+        "points": { "type": "number" },
+        "streak": { "type": "number" },
+        "lastActivity": { "type": "string", "format": "date-time" },
+        "badges": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "string" },
+              "name": { "type": "string" },
+              "unlockedAt": { "type": "string" }
+            }
+          }
+        }
+      },
+      "required": ["uid", "points", "streak"]
+    },
+    "LearningPath": {
+      "title": "Learning Path",
+      "description": "User's personalized learning roadmap.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "goal": { "type": "string" },
+        "level": { "type": "string" },
+        "steps": { "type": "array" }
+      },
+      "required": ["userId", "goal", "steps"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "UserProfile",
+      "description": "User profile and progress data"
+    },
+    "/paths/{userId}": {
+      "schema": "LearningPath",
+      "description": "User's personalized learning path"
+    }
+  }
+}

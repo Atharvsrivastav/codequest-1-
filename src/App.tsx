@@ -35,6 +35,8 @@ import Leaderboard from './components/Leaderboard';
 import LearningPathView, { PathDisplay } from './components/LearningPath';
 import ProgressAnalytics from './components/ProgressAnalytics';
 import { useUserStore } from './lib/store';
+import { signInWithGoogle, logout } from './firebase';
+import { LogIn, LogOut } from 'lucide-react';
 
 type Tab = 'dashboard' | 'tutor' | 'quiz' | 'visualizer' | 'fast-learning' | 'leaderboard' | 'path' | 'analytics';
 
@@ -43,7 +45,7 @@ export default function App() {
   const [isDarkMode, setIsDarkMode] = useState(true);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   
-  const { points, streak, badges, learningPath, setLearningPath } = useUserStore();
+  const { user, points, streak, badges, learningPath, saveLearningPath, loading } = useUserStore();
 
   useEffect(() => {
     if (isDarkMode) {
@@ -145,11 +147,25 @@ export default function App() {
             <h2 className="text-lg font-semibold capitalize">{activeTab.replace('-', ' ')}</h2>
           </div>
           <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2 px-3 py-1.5 bg-secondary rounded-full text-sm font-medium">
-              <Trophy size={16} className="text-yellow-500" />
-              <span>{points.toLocaleString()} pts</span>
-            </div>
-            <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-primary to-purple-500" />
+            {user ? (
+              <>
+                <div className="flex items-center gap-2 px-3 py-1.5 bg-secondary rounded-full text-sm font-medium">
+                  <Trophy size={16} className="text-yellow-500" />
+                  <span>{points.toLocaleString()} pts</span>
+                </div>
+                <Button variant="ghost" size="icon" onClick={logout} title="Logout">
+                  <LogOut size={18} />
+                </Button>
+                <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-primary to-purple-500 overflow-hidden">
+                  {user.photoURL && <img src={user.photoURL} alt={user.displayName || ''} referrerPolicy="no-referrer" />}
+                </div>
+              </>
+            ) : (
+              <Button onClick={signInWithGoogle} className="gap-2">
+                <LogIn size={18} />
+                Sign In
+              </Button>
+            )}
           </div>
         </header>
 
@@ -165,7 +181,7 @@ export default function App() {
             >
               {activeTab === 'dashboard' && <Dashboard />}
               {activeTab === 'path' && (
-                learningPath ? <PathDisplay path={learningPath} /> : <LearningPathView onPathGenerated={setLearningPath} />
+                learningPath ? <PathDisplay path={learningPath} /> : <LearningPathView onPathGenerated={saveLearningPath} />
               )}
               {activeTab === 'tutor' && <AITutor />}
               {activeTab === 'quiz' && <QuizSystem />}

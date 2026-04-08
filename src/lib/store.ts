@@ -5,63 +5,93 @@
 
 import { useState, useEffect } from 'react';
 import { Badge, LeaderboardEntry, LearningPath } from '../types';
+import { auth, db } from '../firebase';
+import { onAuthStateChanged, User } from 'firebase/auth';
+import { doc, onSnapshot, setDoc, updateDoc, increment } from 'firebase/firestore';
 
 export function useUserStore() {
-  const [points, setPoints] = useState<number>(() => {
-    return Number(localStorage.getItem('lumina_points')) || 2450;
-  });
-  
-  const [streak, setStreak] = useState<number>(() => {
-    return Number(localStorage.getItem('lumina_streak')) || 12;
-  });
-
-  const [badges, setBadges] = useState<Badge[]>(() => {
-    const saved = localStorage.getItem('lumina_badges');
-    return saved ? JSON.parse(saved) : [
-      { id: '1', name: 'Quick Learner', description: 'Completed 5 quizzes in a day', icon: 'Zap', unlockedAt: new Date().toISOString() },
-      { id: '2', name: 'Streak Master', description: 'Maintained a 7-day streak', icon: 'Flame', unlockedAt: new Date().toISOString() }
-    ];
-  });
-
-  const [learningPath, setLearningPath] = useState<LearningPath | null>(() => {
-    const saved = localStorage.getItem('lumina_path');
-    return saved ? JSON.parse(saved) : null;
-  });
+  const [user, setUser] = useState<User | null>(null);
+  const [points, setPoints] = useState<number>(0);
+  const [streak, setStreak] = useState<number>(0);
+  const [badges, setBadges] = useState<Badge[]>([]);
+  const [learningPath, setLearningPath] = useState<LearningPath | null>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    localStorage.setItem('lumina_points', points.toString());
-  }, [points]);
+    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+      setUser(currentUser);
+      if (!currentUser) {
+        setPoints(0);
+        setStreak(0);
+        setBadges([]);
+        setLearningPath(null);
+        setLoading(false);
+      }
+    });
+    return () => unsubscribe();
+  }, []);
 
   useEffect(() => {
-    localStorage.setItem('lumina_streak', streak.toString());
-  }, [streak]);
+    if (!user) return;
 
-  useEffect(() => {
-    localStorage.setItem('lumina_badges', JSON.stringify(badges));
-  }, [badges]);
+    const userDocRef = doc(db, 'users', user.uid);
+    const pathDocRef = doc(db, 'paths', user.uid);
 
-  useEffect(() => {
-    localStorage.setItem('lumina_path', JSON.stringify(learningPath));
-  }, [learningPath]);
+    const unsubUser = onSnapshot(userDocRef, (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        setPoints(data.points || 0);
+        setStreak(data.streak || 0);
+        setBadges(data.badges || []);
+      } else {
+        // Initialize new user
+        setDoc(userDocRef, {
+          uid: user.uid,
+          displayName: user.displayName,
+          email: user.email,
+          points: 0,
+          streak: 0,
+          badges: [],
+          lastActivity: new Date().toISOString()
+        });
+      }
+      setLoading(false);
+    });
 
-  const addPoints = (amount: number) => {
-    setPoints(prev => prev + amount);
+    const unsubPath = onSnapshot(pathDocRef, (docSnap) => {
+      if (docSnap.exists()) {
+        setLearningPath(docSnap.data() as LearningPath);
+      }
+    });
+
+    return () => {
+      unsubUser();
+      unsubPath();
+    };
+  }, [user]);
+
+  const addPoints = async (amount: number) => {
+    if (!user) return;
+    const userDocRef = doc(db, 'users', user.uid);
+    await updateDoc(userDocRef, {
+      points: increment(amount)
+    });
   };
 
-  const unlockBadge = (badge: Badge) => {
-    if (!badges.find(b => b.id === badge.id)) {
-      setBadges(prev => [...prev, { ...badge, unlockedAt: new Date().toISOString() }]);
-    }
+  const saveLearningPath = async (path: LearningPath) => {
+    if (!user) return;
+    const pathDocRef = doc(db, 'paths', user.uid);
+    await setDoc(pathDocRef, { ...path, userId: user.uid });
   };
 
   return {
+    user,
     points,
     streak,
     badges,
     learningPath,
+    loading,
     addPoints,
-    unlockBadge,
-    setLearningPath,
-    setStreak
+    saveLearningPath
   };
 }

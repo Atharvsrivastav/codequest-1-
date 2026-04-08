@@ -6,7 +6,8 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { QuizQuestion, Difficulty, LearningPath } from "../types";
 
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "" });
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY || import.meta.env.VITE_GEMINI_API_KEY;
+const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY || "" });
 
 export const geminiService = {
   async generateQuiz(topic: string, difficulty: Difficulty, count: number = 5): Promise<QuizQuestion[]> {
