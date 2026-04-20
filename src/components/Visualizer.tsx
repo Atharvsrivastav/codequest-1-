@@ -63,7 +63,7 @@ export default function Visualizer() {
       setCurrentStepIdx(0);
       setIsPlaying(false);
     } catch (err) {
-      setError("Lumina failed to analyze this code. Check for syntax errors or try a simpler example.");
+      setError("Lumina Engine: Failed to map execution trace. Please double-check your code's syntax or try a simpler example.");
       console.error(err);
     } finally {
       setIsLoading(false);

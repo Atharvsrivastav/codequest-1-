@@ -155,28 +155,10 @@ export const geminiService = {
         model: "gemini-3.1-pro-preview",
         contents: prompt,
         config: {
-          responseMimeType: "application/json",
-          responseSchema: {
-            type: Type.ARRAY,
-            items: {
-              type: Type.OBJECT,
-              properties: {
-                step: { type: Type.INTEGER },
-                type: { type: Type.STRING, enum: ['assign', 'loop', 'condition', 'output', 'call', 'return'] },
-                line: { type: Type.INTEGER },
-                variables: { type: Type.OBJECT },
-                explanation: { type: Type.STRING },
-                output: { type: Type.STRING },
-                callStack: {
-                  type: Type.ARRAY,
-                  items: { type: Type.STRING }
-                }
-              },
-              required: ["step", "type", "line", "variables", "explanation"]
-            }
-          }
+          responseMimeType: "application/json"
         }
       });
+
       if (!response.text) {
         throw new Error("Empty response from Gemini");
       }
