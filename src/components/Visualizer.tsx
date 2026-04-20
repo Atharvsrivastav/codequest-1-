@@ -4,214 +4,332 @@
  */
 
 import { useState, useEffect, useRef } from 'react';
-import { Eye, Play, Pause, RotateCcw, ChevronRight, ChevronLeft, Code, Share2, Info } from 'lucide-react';
+import { 
+  Play, 
+  Pause, 
+  RotateCcw, 
+  ChevronRight, 
+  ChevronLeft, 
+  Code, 
+  Terminal, 
+  Layers, 
+  Cpu,
+  Settings2,
+  Sparkles,
+  Loader2
+} from 'lucide-react';
 import { Button } from './ui/button';
 import { Separator } from './ui/separator';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from './ui/card';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { Badge } from './ui/badge';
+import { Slider } from './ui/slider';
 import { motion, AnimatePresence } from 'motion/react';
-import * as d3 from 'd3';
+import { geminiService } from '../services/gemini';
+import { ExecutionStep } from '../types';
+
+const DEFAULT_CODE = `function factorial(n) {
+  if (n <= 1) return 1;
+  let result = n * factorial(n - 1);
+  return result;
+}
+
+console.log(factorial(3));`;
 
 export default function Visualizer() {
-  const [activeType, setActiveType] = useState<'code' | 'graph' | 'tree'>('graph');
-  const [step, setStep] = useState(0);
+  const [code, setCode] = useState(DEFAULT_CODE);
+  const [language, setLanguage] = useState('javascript');
+  const [steps, setSteps] = useState<ExecutionStep[]>([]);
+  const [currentStepIdx, setCurrentStepIdx] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
-  const svgRef = useRef<SVGSVGElement>(null);
+  const [playbackSpeed, setPlaybackSpeed] = useState([1000]); // ms per step
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  // Mock data for BFS visualization
-  const graphData = {
-    nodes: [
-      { id: 'A', x: 100, y: 100 },
-      { id: 'B', x: 250, y: 50 },
-      { id: 'C', x: 250, y: 150 },
-      { id: 'D', x: 400, y: 50 },
-      { id: 'E', x: 400, y: 150 },
-      { id: 'F', x: 550, y: 100 },
-    ],
-    links: [
-      { source: 'A', target: 'B' },
-      { source: 'A', target: 'C' },
-      { source: 'B', target: 'D' },
-      { source: 'C', target: 'E' },
-      { source: 'D', target: 'F' },
-      { source: 'E', target: 'F' },
-    ],
-    steps: [
-      { active: ['A'], visited: [] },
-      { active: ['B', 'C'], visited: ['A'] },
-      { active: ['D', 'E'], visited: ['A', 'B', 'C'] },
-      { active: ['F'], visited: ['A', 'B', 'C', 'D', 'E'] },
-      { active: [], visited: ['A', 'B', 'C', 'D', 'E', 'F'] },
-    ]
+  const currentStep = steps[currentStepIdx];
+
+  const handleVisualize = async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const generatedSteps = await geminiService.generateExecutionSteps(code, language);
+      setSteps(generatedSteps);
+      setCurrentStepIdx(0);
+      setIsPlaying(false);
+    } catch (err) {
+      setError("Failed to generate visualization. Please try again.");
+      console.error(err);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   useEffect(() => {
-    if (!svgRef.current || activeType !== 'graph') return;
-
-    const svg = d3.select(svgRef.current);
-    svg.selectAll('*').remove();
-
-    const width = 650;
-    const height = 200;
-
-    const currentStep = graphData.steps[step] || graphData.steps[0];
-
-    // Draw links
-    svg.selectAll('line')
-      .data(graphData.links)
-      .enter()
-      .append('line')
-      .attr('x1', d => graphData.nodes.find(n => n.id === d.source)!.x)
-      .attr('y1', d => graphData.nodes.find(n => n.id === d.source)!.y)
-      .attr('x2', d => graphData.nodes.find(n => n.id === d.target)!.x)
-      .attr('y2', d => graphData.nodes.find(n => n.id === d.target)!.y)
-      .attr('stroke', '#333')
-      .attr('stroke-width', 2);
-
-    // Draw nodes
-    const nodes = svg.selectAll('g')
-      .data(graphData.nodes)
-      .enter()
-      .append('g')
-      .attr('transform', d => `translate(${d.x},${d.y})`);
-
-    nodes.append('circle')
-      .attr('r', 20)
-      .attr('fill', d => {
-        if (currentStep.active.includes(d.id)) return '#3b82f6'; // Primary
-        if (currentStep.visited.includes(d.id)) return '#10b981'; // Success
-        return '#1f2937'; // Secondary
-      })
-      .attr('stroke', '#4b5563')
-      .attr('stroke-width', 2)
-      .style('transition', 'all 0.5s ease');
-
-    nodes.append('text')
-      .attr('text-anchor', 'middle')
-      .attr('dy', '.35em')
-      .attr('fill', 'white')
-      .attr('font-weight', 'bold')
-      .text(d => d.id);
-
-  }, [step, activeType]);
-
-  useEffect(() => {
     let interval: any;
-    if (isPlaying) {
+    if (isPlaying && steps.length > 0) {
       interval = setInterval(() => {
-        setStep(prev => (prev + 1) % graphData.steps.length);
-      }, 1500);
+        setCurrentStepIdx((prev) => {
+          if (prev >= steps.length - 1) {
+            setIsPlaying(false);
+            return prev;
+          }
+          return prev + 1;
+        });
+      }, playbackSpeed[0]);
     }
     return () => clearInterval(interval);
-  }, [isPlaying]);
+  }, [isPlaying, steps.length, playbackSpeed]);
+
+  const nextStep = () => {
+    if (currentStepIdx < steps.length - 1) {
+      setCurrentStepIdx(prev => prev + 1);
+    }
+  };
+
+  const prevStep = () => {
+    if (currentStepIdx > 0) {
+      setCurrentStepIdx(prev => prev - 1);
+    }
+  };
+
+  const reset = () => {
+    setCurrentStepIdx(0);
+    setIsPlaying(false);
+  };
 
   return (
     <div className="space-y-8">
       <div className="flex flex-col gap-1">
-        <h1 className="text-3xl font-bold tracking-tight">Interactive Visualizer</h1>
-        <p className="text-muted-foreground">See how algorithms and code work step-by-step.</p>
+        <h1 className="text-3xl font-bold tracking-tight">Code Visualization Engine</h1>
+        <p className="text-muted-foreground">See how your code executes step-by-step with AI-powered insights.</p>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
-        <div className="lg:col-span-1 space-y-4">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+        {/* Input Section */}
+        <div className="lg:col-span-4 space-y-6">
           <Card className="border-border/50 bg-card/50 backdrop-blur-sm">
-            <CardHeader>
-              <CardTitle className="text-lg">Algorithms</CardTitle>
-            </CardHeader>
-            <CardContent className="p-2">
-              <div className="space-y-1">
-                {[
-                  { id: 'graph', label: 'BFS Traversal', icon: Share2 },
-                  { id: 'tree', label: 'Binary Tree DFS', icon: Eye },
-                  { id: 'code', label: 'Recursion: Factorial', icon: Code },
-                ].map((item) => (
-                  <Button
-                    key={item.id}
-                    variant={activeType === item.id ? 'secondary' : 'ghost'}
-                    className="w-full justify-start gap-3"
-                    onClick={() => {
-                      setActiveType(item.id as any);
-                      setStep(0);
-                      setIsPlaying(false);
-                    }}
-                  >
-                    <item.icon size={18} />
-                    {item.label}
-                  </Button>
-                ))}
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <Code size={18} className="text-primary" />
+                  Source Code
+                </CardTitle>
+                <select 
+                  className="bg-secondary text-xs rounded px-2 py-1 outline-none border-none"
+                  value={language}
+                  onChange={(e) => setLanguage(e.target.value)}
+                >
+                  <option value="javascript">JavaScript</option>
+                  <option value="python">Python</option>
+                </select>
               </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <textarea
+                value={code}
+                onChange={(e) => setCode(e.target.value)}
+                className="w-full h-64 bg-black/30 border border-border/50 rounded-lg p-4 font-mono text-sm resize-none focus:outline-none focus:ring-1 focus:ring-primary/50"
+                placeholder="Write your code here..."
+              />
+              <Button 
+                className="w-full gap-2" 
+                onClick={handleVisualize}
+                disabled={isLoading}
+              >
+                {isLoading ? <Loader2 className="animate-spin" size={18} /> : <Sparkles size={18} />}
+                {isLoading ? "Generating Trace..." : "Visualize Execution"}
+              </Button>
+              {error && <p className="text-xs text-destructive text-center">{error}</p>}
             </CardContent>
           </Card>
 
           <Card className="border-border/50 bg-card/50 backdrop-blur-sm">
-            <CardHeader>
+            <CardHeader className="pb-3">
               <CardTitle className="text-sm flex items-center gap-2">
-                <Info size={16} className="text-primary" />
-                Current Step
+                <Settings2 size={16} className="text-primary" />
+                Controls
               </CardTitle>
             </CardHeader>
-            <CardContent className="text-sm space-y-4">
-              <div className="p-3 bg-secondary/50 rounded-lg">
-                <div className="font-bold mb-1">Queue:</div>
-                <div className="flex gap-2">
-                  {graphData.steps[step]?.active.map(id => (
-                    <Badge key={id} variant="default">{id}</Badge>
-                  )) || <span className="text-muted-foreground">Empty</span>}
-                </div>
+            <CardContent className="space-y-6">
+              <div className="flex items-center justify-center gap-4">
+                <Button variant="ghost" size="icon" onClick={prevStep} disabled={currentStepIdx === 0 || steps.length === 0}>
+                  <ChevronLeft size={20} />
+                </Button>
+                <Button 
+                  variant="secondary" 
+                  size="icon" 
+                  className="h-12 w-12 rounded-full"
+                  onClick={() => setIsPlaying(!isPlaying)}
+                  disabled={steps.length === 0}
+                >
+                  {isPlaying ? <Pause size={24} /> : <Play size={24} className="ml-1" />}
+                </Button>
+                <Button variant="ghost" size="icon" onClick={nextStep} disabled={currentStepIdx === steps.length - 1 || steps.length === 0}>
+                  <ChevronRight size={20} />
+                </Button>
+                <Button variant="ghost" size="icon" onClick={reset} disabled={steps.length === 0}>
+                  <RotateCcw size={20} />
+                </Button>
               </div>
-              <p className="text-muted-foreground leading-relaxed">
-                {step === 0 && "Start at node A. Add it to the queue."}
-                {step === 1 && "Visit A. Explore its neighbors B and C. Add them to the queue."}
-                {step === 2 && "Visit B and C. Explore their neighbors D and E. Add them to the queue."}
-                {step === 3 && "Visit D and E. Explore neighbor F. Add it to the queue."}
-                {step === 4 && "Visit F. All nodes visited. Traversal complete."}
-              </p>
+              
+              <div className="space-y-3">
+                <div className="flex justify-between text-xs text-muted-foreground">
+                  <span>Playback Speed</span>
+                  <span>{playbackSpeed[0]}ms</span>
+                </div>
+                <Slider
+                  value={playbackSpeed}
+                  onValueChange={(val) => setPlaybackSpeed(val as number[])}
+                  min={200}
+                  max={3000}
+                  step={100}
+                  className="py-2"
+                />
+              </div>
             </CardContent>
           </Card>
         </div>
 
-        <div className="lg:col-span-3 space-y-6">
-          <Card className="border-border/50 bg-card/50 backdrop-blur-sm overflow-hidden">
-            <div className="p-4 border-b border-border flex items-center justify-between bg-secondary/30">
-              <div className="flex items-center gap-2">
-                <Badge variant="outline">Visualization</Badge>
-                <span className="text-sm font-medium">Breadth First Search</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <Button variant="ghost" size="icon" onClick={() => setStep(prev => Math.max(0, prev - 1))}>
-                  <ChevronLeft size={20} />
-                </Button>
-                <Button variant="secondary" size="icon" onClick={() => setIsPlaying(!isPlaying)}>
-                  {isPlaying ? <Pause size={20} /> : <Play size={20} />}
-                </Button>
-                <Button variant="ghost" size="icon" onClick={() => setStep(prev => (prev + 1) % graphData.steps.length)}>
-                  <ChevronRight size={20} />
-                </Button>
-                <Separator orientation="vertical" className="h-6 mx-2" />
-                <Button variant="ghost" size="icon" onClick={() => { setStep(0); setIsPlaying(false); }}>
-                  <RotateCcw size={20} />
-                </Button>
-              </div>
-            </div>
-            <CardContent className="p-12 flex items-center justify-center min-h-[400px]">
-              <svg ref={svgRef} width="650" height="200" className="overflow-visible" />
-            </CardContent>
-          </Card>
-
-          <Card className="border-border/50 bg-card/50 backdrop-blur-sm">
-            <CardHeader>
-              <CardTitle className="text-lg">Execution Trace</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="font-mono text-sm bg-black/20 p-6 rounded-xl space-y-2 border border-white/5">
-                <div className={step >= 0 ? 'text-primary' : 'text-muted-foreground opacity-50'}>1. queue = [A]</div>
-                <div className={step >= 1 ? 'text-primary' : 'text-muted-foreground opacity-50'}>2. visit(A), queue = [B, C]</div>
-                <div className={step >= 2 ? 'text-primary' : 'text-primary'}>
-                  <span className={step === 2 ? 'bg-primary/20 px-1 rounded' : ''}>3. visit(B), visit(C), queue = [D, E]</span>
+        {/* Visualization Section */}
+        <div className="lg:col-span-8 space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Code View with Highlighting */}
+            <Card className="border-border/50 bg-card/50 backdrop-blur-sm overflow-hidden">
+              <CardHeader className="pb-3 border-b border-border/50 bg-secondary/20">
+                <CardTitle className="text-sm font-medium flex items-center gap-2">
+                  <Code size={16} className="text-primary" />
+                  Execution Flow
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-0 font-mono text-sm h-[400px] overflow-auto">
+                <div className="relative">
+                  {code.split('\n').map((line, i) => (
+                    <div 
+                      key={i} 
+                      className={`flex items-start px-4 py-0.5 transition-colors duration-200 ${
+                        currentStep?.line === i + 1 ? 'bg-primary/20 border-l-4 border-primary' : 'border-l-4 border-transparent'
+                      }`}
+                    >
+                      <span className="w-8 text-muted-foreground text-right mr-4 select-none opacity-50">{i + 1}</span>
+                      <span className="whitespace-pre">{line || ' '}</span>
+                    </div>
+                  ))}
                 </div>
-                <div className={step >= 3 ? 'text-primary' : 'text-muted-foreground opacity-50'}>4. visit(D), visit(E), queue = [F]</div>
-                <div className={step >= 4 ? 'text-primary' : 'text-muted-foreground opacity-50'}>5. visit(F), queue = []</div>
+              </CardContent>
+            </Card>
+
+            {/* Variables Panel */}
+            <Card className="border-border/50 bg-card/50 backdrop-blur-sm overflow-hidden flex flex-col">
+              <CardHeader className="pb-3 border-b border-border/50 bg-secondary/20">
+                <CardTitle className="text-sm font-medium flex items-center gap-2">
+                  <Cpu size={16} className="text-primary" />
+                  Memory State
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-4 flex-1 overflow-auto">
+                <AnimatePresence mode="popLayout">
+                  {currentStep?.variables && Object.keys(currentStep.variables).length > 0 ? (
+                    <div className="space-y-2">
+                      {Object.entries(currentStep.variables).map(([key, value]) => (
+                        <motion.div
+                          key={key}
+                          layout
+                          initial={{ opacity: 0, x: -10 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          className="flex items-center justify-between p-2 bg-secondary/30 rounded border border-border/50"
+                        >
+                          <span className="text-primary font-bold">{key}</span>
+                          <motion.span 
+                            key={JSON.stringify(value)}
+                            initial={{ scale: 1.2, color: '#3b82f6' }}
+                            animate={{ scale: 1, color: '#fff' }}
+                            className="font-mono"
+                          >
+                            {typeof value === 'object' ? JSON.stringify(value) : String(value)}
+                          </motion.span>
+                        </motion.div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="h-full flex items-center justify-center text-muted-foreground italic text-sm">
+                      No variables in scope
+                    </div>
+                  )}
+                </AnimatePresence>
+              </CardContent>
+            </Card>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {/* Explanation Panel */}
+            <Card className="md:col-span-2 border-border/50 bg-card/50 backdrop-blur-sm overflow-hidden">
+              <CardHeader className="pb-3 border-b border-border/50 bg-secondary/20">
+                <CardTitle className="text-sm font-medium flex items-center gap-2">
+                  <Sparkles size={16} className="text-primary" />
+                  AI Explanation
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-4 min-h-[120px]">
+                <AnimatePresence mode="wait">
+                  <motion.p
+                    key={currentStepIdx}
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
+                    className="text-sm leading-relaxed"
+                  >
+                    {currentStep?.explanation || "Start the visualization to see step-by-step explanations."}
+                  </motion.p>
+                </AnimatePresence>
+              </CardContent>
+            </Card>
+
+            {/* Output Panel */}
+            <Card className="border-border/50 bg-card/50 backdrop-blur-sm overflow-hidden">
+              <CardHeader className="pb-3 border-b border-border/50 bg-secondary/20">
+                <CardTitle className="text-sm font-medium flex items-center gap-2">
+                  <Terminal size={16} className="text-primary" />
+                  Console Output
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-4 font-mono text-xs bg-black/40 h-[120px] overflow-auto">
+                {steps.slice(0, currentStepIdx + 1).map((s, i) => s.output && (
+                  <div key={i} className="text-green-400 mb-1">{s.output}</div>
+                ))}
+                {(!currentStep || !steps.some(s => s.output)) && (
+                  <span className="text-muted-foreground opacity-50">No output yet...</span>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Call Stack Panel */}
+          <Card className="border-border/50 bg-card/50 backdrop-blur-sm overflow-hidden">
+            <CardHeader className="pb-3 border-b border-border/50 bg-secondary/20">
+              <CardTitle className="text-sm font-medium flex items-center gap-2">
+                <Layers size={16} className="text-primary" />
+                Call Stack
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-4">
+              <div className="flex flex-wrap gap-2">
+                <AnimatePresence>
+                  {currentStep?.callStack && currentStep.callStack.length > 0 ? (
+                    currentStep.callStack.map((frame, i) => (
+                      <motion.div
+                        key={`${frame}-${i}`}
+                        initial={{ opacity: 0, scale: 0.8 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        exit={{ opacity: 0, scale: 0.8 }}
+                        className="px-3 py-1 bg-primary/20 border border-primary/50 rounded text-xs font-mono flex items-center gap-2"
+                      >
+                        <span className="opacity-50">{i}</span>
+                        {frame}
+                      </motion.div>
+                    ))
+                  ) : (
+                    <span className="text-xs text-muted-foreground italic">Global Scope</span>
+                  )}
+                </AnimatePresence>
               </div>
             </CardContent>
           </Card>

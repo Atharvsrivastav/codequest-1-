@@ -62,6 +62,16 @@ export interface LearningSource {
   mindMap?: any;
 }
 
+export interface ExecutionStep {
+  step: number;
+  type: 'assign' | 'loop' | 'condition' | 'output' | 'call' | 'return';
+  line: number;
+  variables: Record<string, any>;
+  explanation: string;
+  output?: string;
+  callStack?: string[];
+}
+
 export interface UserProgress {
   streak: number;
   totalPoints: number;

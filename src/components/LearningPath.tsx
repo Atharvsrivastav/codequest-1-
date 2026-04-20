@@ -4,7 +4,7 @@
  */
 
 import { useState } from 'react';
-import { Target, Sparkles, Loader2, ArrowRight, CheckCircle2, BookOpen, BrainCircuit, Eye } from 'lucide-react';
+import { Target, Sparkles, Loader2, ArrowRight, CheckCircle2, BookOpen, BrainCircuit, Eye, RotateCcw } from 'lucide-react';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from './ui/card';
@@ -23,17 +23,20 @@ export default function LearningPathView({ onPathGenerated }: LearningPathViewPr
   const [isLoading, setIsLoading] = useState(false);
   const [step, setStep] = useState<'goal' | 'diagnostic' | 'result'>('goal');
   const [diagnosticScore, setDiagnosticScore] = useState(0);
+  const [error, setError] = useState<string | null>(null);
 
   const handleGenerate = async () => {
     setIsLoading(true);
+    setError(null);
     try {
-      // In a real app, we'd run a mini diagnostic quiz here
-      // For now, we'll simulate it
       const path = await geminiService.generateLearningPath(goal, "User is a beginner but knows basic syntax.");
-      onPathGenerated(path);
-      setStep('result');
-    } catch (error) {
-      console.error(error);
+      if (!path || !path.steps || path.steps.length === 0) {
+        throw new Error("Invalid path generated");
+      }
+      await onPathGenerated(path);
+    } catch (err) {
+      console.error("Path generation error:", err);
+      setError("Lumina is having trouble creating your path right now. Please try again.");
     } finally {
       setIsLoading(false);
     }
@@ -117,8 +120,17 @@ export default function LearningPathView({ onPathGenerated }: LearningPathViewPr
                   <p className="text-muted-foreground">Lumina is analyzing your profile and goals.</p>
                 </div>
                 <div className="max-w-xs mx-auto">
-                  <Progress value={65} className="h-2" />
+                  <Progress value={isLoading ? 90 : 65} className="h-2 transition-all duration-1000" />
                 </div>
+                {error && (
+                  <div className="space-y-4">
+                    <p className="text-sm text-destructive font-medium">{error}</p>
+                    <Button variant="outline" size="sm" onClick={handleGenerate} className="gap-2">
+                      <RotateCcw size={14} />
+                      Retry Generation
+                    </Button>
+                  </div>
+                )}
               </CardContent>
               <CardContent>
                 <Button 

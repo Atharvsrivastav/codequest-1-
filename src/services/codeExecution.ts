@@ -3,8 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-const JUDGE0_API_URL = import.meta.env.VITE_JUDGE0_API_URL;
-const JUDGE0_AUTH_TOKEN = import.meta.env.VITE_JUDGE0_AUTH_TOKEN;
+const JUDGE0_API_URL = (import.meta as any).env.VITE_JUDGE0_API_URL;
+const JUDGE0_AUTH_TOKEN = (import.meta as any).env.VITE_JUDGE0_AUTH_TOKEN;
 
 export interface ExecutionResult {
   stdout: string | null;
