@@ -134,48 +134,62 @@ export const geminiService = {
   },
 
   async generateExecutionSteps(code: string, language: string): Promise<ExecutionStep[]> {
-    const prompt = `Analyze the following ${language} code and generate a step-by-step execution trace.
+    const prompt = `Analyze the following ${language} code and generate a detailed step-by-step execution trace.
+    You must trace every single line of execution, including multiple steps for loops and ALL recursive calls.
     For each step, include:
-    - step number
+    - step: step number (starting from 1)
     - type: 'assign', 'loop', 'condition', 'output', 'call', or 'return'
-    - line number (1-indexed)
-    - current state of all variables
-    - a beginner-friendly explanation of what's happening
-    - any output produced in this step
-    - current call stack (if applicable)
+    - line: line number as appears in the code (1-indexed)
+    - variables: current state of all variables in scope (as an object)
+    - explanation: a clear, beginner-friendly explanation of what's happening at this specific step
+    - output: any text logged to the console in this step (if any)
+    - callStack: current function call stack, e.g., ["Global", "factorial(3)", "factorial(2)"]
 
-    Code:
+    Code to analyze:
     ${code}
 
-    Return the response as a JSON array of ExecutionStep objects.`;
+    Return ONLY a JSON array of objects conforming to the schema.`;
 
-    const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
-      contents: prompt,
-      config: {
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.ARRAY,
-          items: {
-            type: Type.OBJECT,
-            properties: {
-              step: { type: Type.INTEGER },
-              type: { type: Type.STRING, enum: ['assign', 'loop', 'condition', 'output', 'call', 'return'] },
-              line: { type: Type.INTEGER },
-              variables: { type: Type.OBJECT },
-              explanation: { type: Type.STRING },
-              output: { type: Type.STRING },
-              callStack: {
-                type: Type.ARRAY,
-                items: { type: Type.STRING }
-              }
-            },
-            required: ["step", "type", "line", "variables", "explanation"]
+    try {
+      const response = await ai.models.generateContent({
+        model: "gemini-3.1-pro-preview",
+        contents: prompt,
+        config: {
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: Type.ARRAY,
+            items: {
+              type: Type.OBJECT,
+              properties: {
+                step: { type: Type.INTEGER },
+                type: { type: Type.STRING, enum: ['assign', 'loop', 'condition', 'output', 'call', 'return'] },
+                line: { type: Type.INTEGER },
+                variables: { type: Type.OBJECT },
+                explanation: { type: Type.STRING },
+                output: { type: Type.STRING },
+                callStack: {
+                  type: Type.ARRAY,
+                  items: { type: Type.STRING }
+                }
+              },
+              required: ["step", "type", "line", "variables", "explanation"]
+            }
           }
         }
+      });
+      if (!response.text) {
+        throw new Error("Empty response from Gemini");
       }
-    });
 
-    return JSON.parse(response.text || "[]");
+      const steps = JSON.parse(response.text);
+      if (!Array.isArray(steps)) {
+        throw new Error("Response is not an array");
+      }
+
+      return steps;
+    } catch (error) {
+      console.error("Error generating execution steps:", error);
+      throw error;
+    }
   }
 };

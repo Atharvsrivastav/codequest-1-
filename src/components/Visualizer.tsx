@@ -48,15 +48,22 @@ export default function Visualizer() {
   const currentStep = steps[currentStepIdx];
 
   const handleVisualize = async () => {
+    if (!code.trim()) {
+      setError("Please enter some code first.");
+      return;
+    }
     setIsLoading(true);
     setError(null);
     try {
       const generatedSteps = await geminiService.generateExecutionSteps(code, language);
+      if (!generatedSteps || generatedSteps.length === 0) {
+        throw new Error("No execution steps were generated.");
+      }
       setSteps(generatedSteps);
       setCurrentStepIdx(0);
       setIsPlaying(false);
     } catch (err) {
-      setError("Failed to generate visualization. Please try again.");
+      setError("Lumina failed to analyze this code. Check for syntax errors or try a simpler example.");
       console.error(err);
     } finally {
       setIsLoading(false);
@@ -190,7 +197,27 @@ export default function Visualizer() {
         </div>
 
         {/* Visualization Section */}
-        <div className="lg:col-span-8 space-y-6">
+        <div className="lg:col-span-8 space-y-6 relative">
+          <AnimatePresence>
+            {isLoading && (
+              <motion.div 
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="absolute inset-0 z-50 bg-background/60 backdrop-blur-md rounded-xl flex flex-col items-center justify-center gap-4 border border-primary/20"
+              >
+                <div className="relative">
+                  <div className="w-16 h-16 border-4 border-primary/20 border-t-primary rounded-full animate-spin" />
+                  <Sparkles className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-primary animate-pulse" size={24} />
+                </div>
+                <div className="text-center space-y-2">
+                  <h3 className="text-xl font-bold text-primary">Analyzing Code</h3>
+                  <p className="text-sm text-muted-foreground">Lumina is mapping the execution trace...</p>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {/* Code View with Highlighting */}
             <Card className="border-border/50 bg-card/50 backdrop-blur-sm overflow-hidden">
